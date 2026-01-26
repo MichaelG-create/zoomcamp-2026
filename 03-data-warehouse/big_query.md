@@ -184,9 +184,8 @@ ORDER BY total_rows DESC;
 ```
 ![look inside partition](images/{DD627D04-2C97-4070-AA1E-3701F477ACD3}.png)
 ![smallest partitions](images/{D7111084-F104-4B11-A945-5D6C073B7A39}.png)
-- not ordered by date (even if partitionned by date)
-- ordered by number of rows contained! (the biggest the first)
-- from 300,000 for bigger to 1-2 for smaller (partition id = date formated 20190201)
+- not ordered by date (even if partitionned by date) (order means more work)
+- from 300,000 for bigger partitions to 1 for smaller (partition id = date formated 20190201)
 
 ---
 # Cluster
