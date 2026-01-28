@@ -1,4 +1,3 @@
-import io
 import os
 import requests
 import pandas as pd
@@ -12,10 +11,13 @@ import pyarrow.parquet as pq
 
 """
 Pre-reqs: 
-1. `pip install pandas pyarrow google-cloud-storage python-dotenv`
-2. Set GOOGLE_APPLICATION_CREDENTIALS to your project/service-account key
-3. Set GCP_GCS_BUCKET as your bucket or change default value of BUCKET
+1. run `uv sync` from this 'extra' folder
+2. rename .env-example to .env (won't be commited thanks to .gitignore)
+3. in .env, 
+    - set GCP_GCS_BUCKET as your bucket or change default value of BUCKET
+    - Set GOOGLE_APPLICATION_CREDENTIALS to your project/service-account key
 """
+
 load_dotenv()
 
 # services = ['fhv','green','yellow']
@@ -92,19 +94,45 @@ YELLOW_DTYPES = {
     "store_and_fwd_flag": "string",
 }
 
-def csv_to_parquet_with_progress(csv_path: str, parquet_path: str, chunksize: int = 100_000):
+def csv_to_parquet_with_progress(csv_path: str, parquet_path: str, service_color: str, chunksize: int = 100_000):
     # 1) Count rows (gzip-aware)
     with gzip.open(csv_path, mode="rt") as f:
         total_rows = sum(1 for _ in f) - 1  # minus header
     if total_rows <= 0:
         raise ValueError("CSV appears to be empty")
 
-    # 2) Read in chunks with fixed dtypes
+    # 2) Read in chunks with fixed dtypes so parquet columns will directly have good types
+    # (as we did in module 1 in ingest.py script)
+    dtypes = {
+        "VendorID": "Int64",
+        "passenger_count": "Int64",
+        "trip_distance": "float64",
+        "RatecodeID": "Int64",
+        "store_and_fwd_flag": "string",
+        "PULocationID": "Int64",
+        "DOLocationID": "Int64",
+        "payment_type": "Int64",
+        "fare_amount": "float64",
+        "extra": "float64",
+        "mta_tax": "float64",
+        "tip_amount": "float64",
+        "tolls_amount": "float64",
+        "improvement_surcharge": "float64",
+        "total_amount": "float64",
+        "congestion_surcharge": "float64",
+    }
+
+    if service_color == 'yellow':
+        parse_dates = ["tpep_pickup_datetime", "tpep_dropoff_datetime"]
+    else:
+        parse_dates = ["lpep_pickup_datetime", "lpep_dropoff_datetime"]
+
     reader = pd.read_csv(
         csv_path,
+        dtype=dtypes,
+        parse_dates=parse_dates, 
         compression="gzip",
         chunksize=chunksize,
-        dtype=YELLOW_DTYPES,   # enforce consistent schema
         low_memory=False,
     )
 
@@ -155,22 +183,11 @@ def web_to_gcs(year, service):
         if os.path.exists(parquet_file_name):
             print(f"Parquet already exists locally, skipping conversion: {parquet_file_name}")
         else:
-            csv_to_parquet_with_progress(csv_file_name, parquet_file_name)
+            csv_to_parquet_with_progress(csv_file_name, parquet_file_name, service)
             print(f"Parquet: {parquet_file_name}")
 
         # 4) Upload with per-byte progress bar
         upload_to_gcs_with_progress(BUCKET, object_name, parquet_file_name)
-
-
-YELLOW_DTYPES = {
-    "VendorID": "Int64",
-    "passenger_count": "Int64",
-    "RatecodeID": "Int64",
-    "PULocationID": "Int64",
-    "DOLocationID": "Int64",
-    "payment_type": "Int64",
-    "store_and_fwd_flag": "string",
-}
 
 # web_to_gcs('2019', 'green')
 # web_to_gcs('2020', 'green')
